@@ -4,7 +4,7 @@ const { default: axios } = require("axios");
 const nodemailer = require("nodemailer");
 const Imap = require("imap");
 
-const logger = require("./logger");
+const logger = require("./utils/logger");
 
 const { IMAP_USERNAME, IMAP_PASSWORD, IMAP_FROM, AI_URL } = process.env;
 
