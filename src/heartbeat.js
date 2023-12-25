@@ -1,4 +1,5 @@
 const http = require("http");
+const logger = require("./utils/logger");
 
 module.exports = initHeartbeat = () => {
   const server = http.createServer((req, res) => {
@@ -13,6 +14,6 @@ module.exports = initHeartbeat = () => {
 
   const PORT = process.env.HEARTBEAT_PORT || 3000; // Du kan ändra porten efter behov
   server.listen(PORT, () => {
-    console.log(`Hearbeat started on port: ${PORT}`);
+    logger.log(`Server started on port: ${PORT}`, "Heartbeat");
   });
 };
