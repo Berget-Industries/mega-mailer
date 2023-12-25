@@ -1,7 +1,5 @@
 require("dotenv").config();
 
-const logger = require("./utils/logger");
-const MessageHandler = require("./MessageHandler");
 const InboxHandler = require("./InboxHandler");
 const initHeartbeat = require("./heartbeat");
 
