@@ -5,7 +5,7 @@ const baseUrl = API_HOST + "/api";
 
 async function testApiConnection() {
   return new Promise(async (resolve, reject) => {
-    const url = API_HOST + "/ping";
+    const url = baseUrl + "/ping";
     const response = await axios.get(url);
     if (response.status === 200) {
       resolve();
