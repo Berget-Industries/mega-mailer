@@ -2,6 +2,7 @@ require("dotenv").config();
 const { simpleParser } = require("mailparser");
 const { default: axios } = require("axios");
 const nodemailer = require("nodemailer");
+const useAgent = require("./utils/useAgent");
 
 const logger = require("./utils/logger");
 
@@ -181,7 +182,7 @@ class MessageHandler {
       };
 
       try {
-        const response = await axios.post(AI_URL, requestBody);
+        const response = await useAgent(requestBody);
 
         const { output, sessionId } = response.data;
         const subject = `Ärendes: ${sessionId}`;
