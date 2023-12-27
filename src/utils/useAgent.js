@@ -22,4 +22,12 @@ async function useAgent(body) {
   });
 }
 
-module.exports = { useAgent, testAgentConnection };
+async function useManualFilter(body) {
+  return axios.post(AGENT_HOST + "/manualFilter", body, {
+    headers: {
+      Authorization: API_KEY,
+    },
+  });
+}
+
+module.exports = { useAgent, useManualFilter, testAgentConnection };
