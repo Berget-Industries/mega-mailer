@@ -3,16 +3,16 @@ require("dotenv").config();
 const InboxHandler = require("./InboxHandler");
 const initHeartbeat = require("./heartbeat");
 const checkEnv = require("./utils/checkEnv");
-const useAgent = require("./utils/useAgent");
-const useApi = require("./utils/useApi");
+const { testAgentConnection } = require("./utils/useAgent");
+const { testApiConnection } = require("./utils/useApi");
 
 function init() {
   return new Promise(async (resolve, reject) => {
     try {
       checkEnv();
       initHeartbeat();
-      await useApi.testConnection();
-      await useAgent.testConnection();
+      await testApiConnection();
+      await testAgentConnection();
       resolve();
     } catch (error) {
       console.error(error);

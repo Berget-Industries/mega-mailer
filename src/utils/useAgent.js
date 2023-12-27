@@ -2,7 +2,7 @@ const axios = require("axios");
 
 const { API_KEY, AGENT_HOST } = process.env;
 
-module.exports.testConnection = async function testConnection() {
+async function testAgentConnection() {
   return new Promise(async (resolve, reject) => {
     const url = AGENT_HOST + "/ping";
     const response = await axios.get(url);
@@ -12,12 +12,14 @@ module.exports.testConnection = async function testConnection() {
       reject();
     }
   });
-};
+}
 
-module.exports = async function useAgent(body) {
+async function useAgent(body) {
   return axios.post(AGENT_HOST + "/agent", body, {
     headers: {
       Authorization: API_KEY,
     },
   });
-};
+}
+
+module.exports = { useAgent, testAgentConnection };

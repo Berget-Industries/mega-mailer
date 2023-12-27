@@ -3,7 +3,7 @@ const axios = require("axios");
 const { API_KEY, API_HOST } = process.env;
 const baseUrl = API_HOST + "/api";
 
-module.exports.testConnection = async function testConnection() {
+async function testApiConnection() {
   return new Promise(async (resolve, reject) => {
     const url = API_HOST + "/ping";
     const response = await axios.get(url);
@@ -13,9 +13,9 @@ module.exports.testConnection = async function testConnection() {
       reject();
     }
   });
-};
+}
 
-module.exports = async function useApi() {
+async function useApi() {
   return {
     get: (path) => {
       const url = baseUrl + path;
@@ -34,4 +34,6 @@ module.exports = async function useApi() {
       });
     },
   };
-};
+}
+
+module.exports = { useApi, testApiConnection };
