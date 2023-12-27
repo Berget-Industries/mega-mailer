@@ -1,10 +1,11 @@
 import axios from "npm:axios";
 
-const { API_KEY, API_URL } = process.env;
+const { API_KEY, API_HOST } = process.env;
+const baseUrl = API_HOST + "/api";
 
 export async function testConnection() {
   return new Promise(async (resolve, reject) => {
-    const url = API_URL + "/ping";
+    const url = API_HOST + "/ping";
     const response = await axios.get(url);
     if (response.status === 200) {
       resolve();
@@ -17,7 +18,7 @@ export async function testConnection() {
 export default async function useApi() {
   return {
     get: (path) => {
-      const url = API_URL + path;
+      const url = baseUrl + path;
       return axios.get(url, {
         headers: {
           Authorization: API_KEY,
@@ -25,7 +26,7 @@ export default async function useApi() {
       });
     },
     post: (path, body) => {
-      const url = API_URL + path;
+      const url = baseUrl + path;
       return axios.post(url, body, {
         headers: {
           Authorization: API_KEY,
