@@ -1,10 +1,20 @@
 import axios from "npm:axios";
-import dotenv from "npm:dotenv";
-dotenv.config();
+
+const { API_KEY, API_URL } = process.env;
+
+export async function testConnection() {
+  return new Promise(async (resolve, reject) => {
+    const url = API_URL + "/ping";
+    const response = await axios.get(url);
+    if (response.status === 200) {
+      resolve();
+    } else {
+      reject();
+    }
+  });
+}
 
 export default async function useApi() {
-  const { API_KEY, API_URL } = process.env;
-
   return {
     get: (path) => {
       const url = API_URL + path;
