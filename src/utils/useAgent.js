@@ -1,6 +1,6 @@
 import axios from "npm:axios";
 
-const { API_KEY, AI_URL } = process.env;
+const { API_KEY, AGENT_HOST } = process.env;
 
 export async function testConnection() {
   return new Promise(async (resolve, reject) => {
@@ -15,7 +15,7 @@ export async function testConnection() {
 }
 
 export default async function useAgent(body) {
-  return axios.post(AI_URL, body, {
+  return axios.post(AGENT_HOST, body, {
     headers: {
       Authorization: API_KEY,
     },
