@@ -2,7 +2,7 @@ require("dotenv").config();
 const { simpleParser } = require("mailparser");
 const { default: axios } = require("axios");
 const nodemailer = require("nodemailer");
-const useAgent = require("./utils/useAgent");
+const { useAgent, useManualFilter } = require("./utils/useAgent");
 
 const logger = require("./utils/logger");
 
@@ -66,10 +66,19 @@ class MessageHandler {
 
       await this.parseMessage();
 
+      const isManual = await this.checkManualFilter();
+      if (isManual) throw "manual";
+
       await this.generateDraft();
 
       await this.sendDraft();
     } catch (error) {
+      if (error === "manual") {
+        // NOT HANDLED YET.
+        // Having some issues not knowing how to think about this.
+        // I have to go undergound and think some
+      }
+
       if (error === "no-unread-messages") {
         // NOT HANDLED YET.
         // Having some issues not knowing how to think about this.
@@ -169,6 +178,11 @@ class MessageHandler {
         return resolve();
       });
     });
+
+  checkManualFilter = async () => {
+    const response = await useManualFilter(this.parsedMessage);
+    return response.data.manual;
+  };
 
   generateDraft = () =>
     new Promise(async (resolve, reject) => {
