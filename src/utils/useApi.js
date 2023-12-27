@@ -1,9 +1,9 @@
-import axios from "npm:axios";
+const axios = require("axios");
 
 const { API_KEY, API_HOST } = process.env;
 const baseUrl = API_HOST + "/api";
 
-export async function testConnection() {
+module.exports.testConnection = async function testConnection() {
   return new Promise(async (resolve, reject) => {
     const url = API_HOST + "/ping";
     const response = await axios.get(url);
@@ -13,9 +13,9 @@ export async function testConnection() {
       reject();
     }
   });
-}
+};
 
-export default async function useApi() {
+module.exports = async function useApi() {
   return {
     get: (path) => {
       const url = baseUrl + path;
@@ -34,4 +34,4 @@ export default async function useApi() {
       });
     },
   };
-}
+};
