@@ -1,6 +1,6 @@
 require("dotenv").config();
 
-const InboxHandler = require("./InboxHandler");
+const MainInboxHandler = require("./InboxHandler");
 const initHeartbeat = require("./heartbeat");
 const checkEnv = require("./utils/checkEnv");
 const { testAgentConnection } = require("./utils/useAgent");
@@ -24,16 +24,21 @@ function init() {
 async function main() {
   await init();
 
-  const imapConfig = {
-    user: process.env.IMAP_USERNAME,
-    password: process.env.IMAP_PASSWORD,
-    host: "imap.gmail.com",
-    port: 993,
-    tls: true,
-    tlsOptions: { rejectUnauthorized: false },
+  const mailerConfig = {
+    organizationId: "6567688da895a324a728385d",
+    mainInbox: "[Gmail]/Alla mail",
+    manualFilter: true,
+    imapConfig: {
+      user: process.env.IMAP_USERNAME,
+      password: process.env.IMAP_PASSWORD,
+      host: "imap.gmail.com",
+      port: 993,
+      tls: true,
+      tlsOptions: { rejectUnauthorized: false },
+    },
   };
 
-  const inboxHandler = new InboxHandler(imapConfig);
+  const mainInboxHandler = new MainInboxHandler(mailerConfig);
 }
 
 main();

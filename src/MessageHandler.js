@@ -26,8 +26,11 @@ class MessageHandler {
     html: null,
   };
 
-  constructor(imap) {
+  constructor({ imap, organizationId, manualFilter }) {
     this.imap = imap;
+    this.organizationId = organizationId;
+    this.manualFilter = manualFilter;
+
     logger.log("New message handler", "MessageHandler");
   }
 
@@ -66,8 +69,10 @@ class MessageHandler {
 
       await this.parseMessage();
 
-      const isManual = await this.checkManualFilter();
-      if (isManual) throw "manual";
+      if (this.manualFilter) {
+        const isManual = await this.checkManualFilter();
+        if (isManual) throw "manual";
+      }
 
       await this.generateDraft();
 
@@ -180,7 +185,10 @@ class MessageHandler {
     });
 
   checkManualFilter = async () => {
-    const response = await useManualFilter(this.parsedMessage);
+    const response = await useManualFilter({
+      ...this.parsedMessage,
+      organizationId: this.organizationId,
+    });
     return response.data.manual;
   };
 
@@ -193,6 +201,7 @@ class MessageHandler {
         address: this.parsedMessage.address,
         message: this.parsedMessage.message,
         sessionId: this.parsedMessage.sessionId,
+        organizationId: this.organizationId,
       };
 
       try {
