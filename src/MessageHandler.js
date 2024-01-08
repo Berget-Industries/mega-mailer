@@ -184,6 +184,36 @@ class MessageHandler {
     return response.data.manual;
   };
 
+  moveMessage = async (folderName) =>
+    new Promise((resolve, reject) => {
+      const moveMessage = () => {
+        this.imap.move(this.message, folderName, (err) => {
+          if (err && err.textCode === "TRYCREATE") {
+            return createFolder();
+          } else if (err) {
+            logger.error(err, "MessageHandler", "moveMessageManual");
+            return reject(err);
+          } else {
+            logger.log(`Message moved to ${folderName}`, "MessageHandler");
+            return resolve();
+          }
+        });
+      };
+
+      const createFolder = () => {
+        this.imap.addBox(folderName, (err) => {
+          if (err) {
+            logger.error(err, "MessageHandler", "createFolder");
+            return reject(err);
+          }
+          logger.log(`Folder created: ${folderName}`, "MessageHandler");
+          return moveMessage();
+        });
+      };
+
+      moveMessage();
+    });
+
   generateDraft = () =>
     new Promise(async (resolve, reject) => {
       logger.log("Generating draft...", "MessageHandler");
