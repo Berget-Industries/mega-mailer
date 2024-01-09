@@ -163,6 +163,8 @@ class MessageHandler {
         const idRegex = /[0-9a-f]{24}/;
         const match = subject.match(idRegex);
         const sessionId = match ? match[0] : null;
+        const messageId = parsed.headers.get("message-id");
+        const references = parsed.headers.get("references");
 
         if (address === IMAP_USERNAME) {
           this.isMessageFromSelf = true;
@@ -173,7 +175,10 @@ class MessageHandler {
           name,
           address,
           message,
+          subject,
           sessionId,
+          messageId,
+          references,
         };
         return resolve();
       });
@@ -188,24 +193,43 @@ class MessageHandler {
     new Promise(async (resolve, reject) => {
       logger.log("Generating draft...", "MessageHandler");
 
+      const {
+        name,
+        address,
+        message,
+        subject,
+        sessionId,
+        messageId,
+        references,
+      } = this.parsedMessage;
+
       const requestBody = {
-        name: this.parsedMessage.name,
-        address: this.parsedMessage.address,
-        message: this.parsedMessage.message,
-        sessionId: this.parsedMessage.sessionId,
+        name,
+        address,
+        message,
+        sessionId,
       };
 
       try {
         const response = await useAgent(requestBody);
 
         const { output, sessionId } = response.data;
-        const subject = `Ärendes: ${sessionId}`;
+        const newSubject = subject.startsWith("Re: ")
+          ? subject
+          : `Re: ${subject} | ${sessionId}`;
 
         this.draft = {
           from: IMAP_FROM,
-          subject: subject,
-          to: this.parsedMessage.address,
+          subject: newSubject,
+          to: address,
           html: output,
+          replyTo: IMAP_FROM,
+          headers: {
+            "In-Reply-To": messageId,
+            References: references
+              ? [...references, messageId].join(" ")
+              : messageId,
+          },
         };
 
         resolve();
