@@ -26,8 +26,11 @@ class MessageHandler {
     html: null,
   };
 
-  constructor(imap) {
+  constructor({ imap, organizationId, manualFilter }) {
     this.imap = imap;
+    this.organizationId = organizationId;
+    this.manualFilter = manualFilter;
+
     logger.log("New message handler", "MessageHandler");
   }
 
@@ -66,8 +69,10 @@ class MessageHandler {
 
       await this.parseMessage();
 
-      const isManual = await this.checkManualFilter();
-      if (isManual) throw "manual";
+      if (this.manualFilter) {
+        const isManual = await this.checkManualFilter();
+        if (isManual) throw "manual";
+      }
 
       await this.generateDraft();
 
@@ -185,9 +190,42 @@ class MessageHandler {
     });
 
   checkManualFilter = async () => {
-    const response = await useManualFilter(this.parsedMessage);
+    const response = await useManualFilter({
+      ...this.parsedMessage,
+      organizationId: this.organizationId,
+    });
     return response.data.manual;
   };
+
+  moveMessage = async (folderName) =>
+    new Promise((resolve, reject) => {
+      const moveMessage = () => {
+        this.imap.move(this.message, folderName, (err) => {
+          if (err && err.textCode === "TRYCREATE") {
+            return createFolder();
+          } else if (err) {
+            logger.error(err, "MessageHandler", "moveMessageManual");
+            return reject(err);
+          } else {
+            logger.log(`Message moved to ${folderName}`, "MessageHandler");
+            return resolve();
+          }
+        });
+      };
+
+      const createFolder = () => {
+        this.imap.addBox(folderName, (err) => {
+          if (err) {
+            logger.error(err, "MessageHandler", "createFolder");
+            return reject(err);
+          }
+          logger.log(`Folder created: ${folderName}`, "MessageHandler");
+          return moveMessage();
+        });
+      };
+
+      moveMessage();
+    });
 
   generateDraft = () =>
     new Promise(async (resolve, reject) => {
@@ -208,6 +246,7 @@ class MessageHandler {
         address,
         message,
         sessionId,
+        organizationId: this.organizationId,
       };
 
       try {
