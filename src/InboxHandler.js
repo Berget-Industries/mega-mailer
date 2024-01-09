@@ -14,17 +14,24 @@ class InboxHandler {
   _onMail = this._onMail.bind(this);
   _onEnd = this._onEnd.bind(this);
 
-  constructor(imapConfig) {
+  constructor({ imapConfig, mainInbox, manualFilter, organizationId }) {
     this.imapConfig = imapConfig;
+    this.mainInbox = mainInbox;
+    this.manualFilter = manualFilter;
+    this.organizationId = organizationId;
 
-    this.initImap(this.imapConfig);
+    this.initImap();
     this.initEvents();
     this.connect();
   }
 
-  initImap(config) {
-    this.imap = new Imap(config);
-    this.messageHandler = new MessageHandler(this.imap);
+  initImap() {
+    this.imap = new Imap(this.imapConfig);
+    this.messageHandler = new MessageHandler({
+      organizationId: this.organizationId,
+      manualFilter: this.manualFilter,
+      imap: this.imap,
+    });
   }
 
   initEvents() {
@@ -43,7 +50,7 @@ class InboxHandler {
   async _onMail() {
     logger.log("New mail received.", "InboxHandler");
     if (!this.messageHandler.isWorking) {
-      this.messageHandler.runLogic();
+      this.messageHandler.runLogic(this.manualFilter);
     }
   }
 
@@ -58,7 +65,7 @@ class InboxHandler {
   }
 
   _onReady() {
-    this.imap.openBox("[Gmail]/Alla mail", false, (err, box) => {
+    this.imap.openBox(this.mainInbox, false, (err, box) => {
       if (err) {
         logger.error(`Error was emitted: (${err.code})`, "IMAP");
         this.restart();
@@ -78,7 +85,7 @@ class InboxHandler {
     this.imap = null;
     this.messageHandler = null;
 
-    this.initImap(this.imapConfig);
+    this.initImap();
     this.initEvents();
     this.connect();
   }
