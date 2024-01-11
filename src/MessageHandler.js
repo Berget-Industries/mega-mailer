@@ -83,9 +83,9 @@ class MessageHandler {
       await this.sendDraft();
     } catch (error) {
       if (error === "manual") {
-        // NOT HANDLED YET.
-        // Having some issues not knowing how to think about this.
-        // I have to go undergound and think some
+        const manualFolder = "Manuellt";
+        this.moveMessage(manualFolder);
+        return;
       }
 
       if (error === "no-unread-messages") {
