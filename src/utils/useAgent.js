@@ -30,4 +30,17 @@ async function useManualFilter(body) {
   });
 }
 
-module.exports = { useAgent, useManualFilter, testAgentConnection };
+async function useMailSubject(body) {
+  return axios.post(AGENT_HOST + "/mailSubject", body, {
+    headers: {
+      Authorization: API_KEY,
+    },
+  });
+}
+
+module.exports = {
+  useAgent,
+  useManualFilter,
+  useMailSubject,
+  testAgentConnection,
+};
