@@ -84,7 +84,8 @@ class MessageHandler {
     } catch (error) {
       if (error === "manual") {
         const manualFolder = "Manuellt";
-        this.moveMessage(manualFolder);
+        await this.moveMessage(manualFolder);
+        await this.markMessageAsUnseen();
         return;
       }
 
@@ -229,6 +230,18 @@ class MessageHandler {
       };
 
       moveMessage();
+    });
+
+  markMessageAsUnseen = () =>
+    new Promise((resolve, reject) => {
+      this.imap.delFlags(this.message, ["\\Seen"], (err) => {
+        if (err) {
+          logger.error(err, "MessageHandler", "markMessageAsUnseen");
+          return reject(err);
+        } else {
+          resolve();
+        }
+      });
     });
 
   generateDraft = () =>
