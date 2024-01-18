@@ -3,11 +3,10 @@ const { simpleParser } = require("mailparser");
 const { default: axios } = require("axios");
 const nodemailer = require("nodemailer");
 const {
-  useAgent,
+  useMegaAssistant,
   useManualFilter,
   useMailSubject,
 } = require("./utils/useAgent");
-const useApi = require("./utils/useApi");
 const logger = require("./utils/logger");
 
 const { IMAP_USERNAME, IMAP_PASSWORD, IMAP_FROM, AI_URL } = process.env;
@@ -267,7 +266,7 @@ class MessageHandler {
       };
 
       try {
-        const response = await useAgent(requestBody);
+        const response = await useMegaAssistant(requestBody);
 
         const { output, sessionId } = response.data;
 

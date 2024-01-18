@@ -4,7 +4,6 @@ module.exports = function checkEnv() {
     IMAP_USERNAME,
     IMAP_PASSWORD,
     IMAP_FROM,
-    AGENT_HOST,
     API_HOST,
     API_KEY,
   } = process.env;
@@ -14,7 +13,6 @@ module.exports = function checkEnv() {
     IMAP_USERNAME,
     IMAP_PASSWORD,
     IMAP_FROM,
-    AGENT_HOST,
     API_HOST,
     API_KEY,
   };
