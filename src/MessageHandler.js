@@ -1,16 +1,14 @@
 require("dotenv").config();
 const { simpleParser } = require("mailparser");
-const { default: axios } = require("axios");
 const nodemailer = require("nodemailer");
 const {
-  useAgent,
+  useMegaAssistant,
   useManualFilter,
   useMailSubject,
-} = require("./utils/useAgent");
-const useApi = require("./utils/useApi");
+} = require("./utils/useChains");
 const logger = require("./utils/logger");
 
-const { IMAP_USERNAME, IMAP_PASSWORD, IMAP_FROM, AI_URL } = process.env;
+const { IMAP_USERNAME, IMAP_PASSWORD, IMAP_FROM } = process.env;
 
 class MessageHandler {
   imap = null;
@@ -267,7 +265,7 @@ class MessageHandler {
       };
 
       try {
-        const response = await useAgent(requestBody);
+        const response = await useMegaAssistant(requestBody);
 
         const { output, sessionId } = response.data;
 

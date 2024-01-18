@@ -12,7 +12,6 @@ function init() {
       checkEnv();
       initHeartbeat();
       await testApiConnection();
-      await testAgentConnection();
       resolve();
     } catch (error) {
       console.error(error);
