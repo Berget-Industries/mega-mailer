@@ -3,7 +3,6 @@ require("dotenv").config();
 const MainInboxHandler = require("./InboxHandler");
 const initHeartbeat = require("./heartbeat");
 const checkEnv = require("./utils/checkEnv");
-const { testAgentConnection } = require("./utils/useAgent");
 const { testApiConnection } = require("./utils/useApi");
 
 function init() {

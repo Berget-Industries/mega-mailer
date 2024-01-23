@@ -3,7 +3,7 @@ const { simpleParser } = require("mailparser");
 const nodemailer = require("nodemailer");
 const {
   useMegaAssistant,
-  useManualFilter,
+  useAutoFilter,
   useMailSubject,
 } = require("./utils/useChains");
 const logger = require("./utils/logger");
@@ -28,10 +28,10 @@ class MessageHandler {
     html: null,
   };
 
-  constructor({ imap, organizationId, manualFilter }) {
+  constructor({ imap, organizationId, autoFilter }) {
     this.imap = imap;
     this.organizationId = organizationId;
-    this.manualFilter = manualFilter;
+    this.autoFilter = autoFilter;
 
     logger.log("New message handler", "MessageHandler");
   }
@@ -71,22 +71,20 @@ class MessageHandler {
 
       await this.parseMessage();
 
-      if (this.manualFilter) {
-        const isManual = await this.checkManualFilter();
-        if (isManual) throw "manual";
+      if (this.autoFilter) {
+        logger.log("Auto filteringing...", "MessageHandler");
+        const autoFilterOutput = await this.checkAutoFilter();
+        if (autoFilterOutput !== "MEGA-ASSISTANT") {
+          await this.moveMessage(autoFilterOutput);
+          await this.markMessageAsUnseen();
+          return;
+        }
       }
 
       await this.generateDraft();
 
       await this.sendDraft();
     } catch (error) {
-      if (error === "manual") {
-        const manualFolder = "Manuellt";
-        await this.moveMessage(manualFolder);
-        await this.markMessageAsUnseen();
-        return;
-      }
-
       if (error === "no-unread-messages") {
         // NOT HANDLED YET.
         // Having some issues not knowing how to think about this.
@@ -192,20 +190,80 @@ class MessageHandler {
       });
     });
 
-  checkManualFilter = async () => {
-    const response = await useManualFilter({
+  checkAutoFilter = async () => {
+    const response = await useAutoFilter({
       ...this.parsedMessage,
       organizationId: this.organizationId,
     });
-    return response.data.manual;
+    return response.data.output;
   };
 
   moveMessage = async (folderName) =>
-    new Promise((resolve, reject) => {
-      const moveMessage = () => {
+    new Promise(async (resolve, reject) => {
+      const checkIfFolderExists = (folderName) =>
+        new Promise((resolve) => {
+          this.imap.getBoxes((error, boxes) => {
+            if (error) {
+              throw new Error("Kunde inte leta efter inkorgar.");
+            }
+
+            const flattenBoxes = (boxes, prefix = "") => {
+              let boxList = [];
+              Object.keys(boxes).forEach((box) => {
+                const currentBoxName = prefix + box;
+                boxList.push(currentBoxName);
+                if (boxes[box].children) {
+                  boxList = [
+                    ...boxList,
+                    ...flattenBoxes(
+                      boxes[box].children,
+                      currentBoxName + boxes[box].delimiter
+                    ),
+                  ];
+                }
+              });
+              return boxList;
+            };
+
+            const allBoxes = flattenBoxes(boxes);
+            if (allBoxes.includes(folderName)) {
+              return resolve(true);
+            } else {
+              return resolve(false);
+            }
+          });
+        });
+
+      const createFolder = async (folderName) => {
+        const _create = (folderName) =>
+          new Promise((reolve, reject) => {
+            this.imap.addBox(folderName, (err) => {
+              if (err) {
+                logger.error(err, "MessageHandler", "createFolder");
+                return reject(err);
+              }
+              logger.log(`Folder created: ${folderName}`, "MessageHandler");
+              return reolve();
+            });
+          });
+
+        const split = folderName.split("/");
+        if (split.length > 1) {
+          const parentFolder = split[0];
+          const parentFolderExsists = await checkIfFolderExists(parentFolder);
+          if (!parentFolderExsists) {
+            await _create(parentFolder);
+          }
+        }
+
+        await _create(folderName);
+        return moveMessage(folderName);
+      };
+
+      const moveMessage = (folderName) => {
         this.imap.move(this.message, folderName, (err) => {
           if (err && err.textCode === "TRYCREATE") {
-            return createFolder();
+            return createFolder(folderName);
           } else if (err) {
             logger.error(err, "MessageHandler", "moveMessageManual");
             return reject(err);
@@ -216,18 +274,7 @@ class MessageHandler {
         });
       };
 
-      const createFolder = () => {
-        this.imap.addBox(folderName, (err) => {
-          if (err) {
-            logger.error(err, "MessageHandler", "createFolder");
-            return reject(err);
-          }
-          logger.log(`Folder created: ${folderName}`, "MessageHandler");
-          return moveMessage();
-        });
-      };
-
-      moveMessage();
+      moveMessage(folderName);
     });
 
   markMessageAsUnseen = () =>
