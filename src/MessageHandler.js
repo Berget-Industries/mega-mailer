@@ -3,18 +3,21 @@ const { simpleParser } = require("mailparser");
 const nodemailer = require("nodemailer");
 const {
   useMegaAssistant,
-  useManualFilter,
+  useAutoFilter,
   useMailSubject,
 } = require("./utils/useChains");
 const logger = require("./utils/logger");
+const EmailStatusManager = require("./utils/EmailStatusManager");
 
 const { IMAP_USERNAME, IMAP_PASSWORD, IMAP_FROM } = process.env;
 
 class MessageHandler {
   imap = null;
   message = null;
+  accountId = null;
 
   isWorking = false;
+  messageQueue = [];
   isMessageFromSelf = false;
   error = [];
 
@@ -28,10 +31,13 @@ class MessageHandler {
     html: null,
   };
 
-  constructor({ imap, organizationId, manualFilter }) {
+  constructor({ imap, organizationId, autoFilter, accountId }) {
     this.imap = imap;
     this.organizationId = organizationId;
-    this.manualFilter = manualFilter;
+    this.autoFilter = autoFilter;
+    this.accountId = accountId;
+
+    this.emailStatusManager = new EmailStatusManager();
 
     logger.log("New message handler", "MessageHandler");
   }
@@ -62,32 +68,42 @@ class MessageHandler {
   };
 
   async runLogic() {
+    if (this.isWorking || this.messageQueue.length === 0) return;
+    this.isWorking = true;
+
+    // Ta bort första meddelandet från kön och bearbeta det
+    const message = this.messageQueue.shift();
+    this.message = message;
+
     try {
-      this.isWorking = true;
-
       await this.processNextMessage();
-
       await this.fetchMessage();
-
       await this.parseMessage();
 
-      if (this.manualFilter) {
-        const isManual = await this.checkManualFilter();
-        if (isManual) throw "manual";
+      if (this.autoFilter) {
+        logger.log("Auto-filtering...", "MessageHandler");
+        const autoFilterOutput = await this.checkAutoFilter();
+
+        if (autoFilterOutput === "MEGA-ASSISTANT") {
+          await this.moveMessage(".Assistant");
+          await this.markMessageAsSeen();
+        } else {
+          const split = autoFilterOutput.split("/");
+
+          const parentFolder = split[0];
+          const subFolder = autoFilterOutput;
+
+          await this.moveMessage(parentFolder);
+          await this.moveMessage(subFolder);
+
+          return;
+        }
       }
 
       await this.generateDraft();
-
       await this.sendDraft();
     } catch (error) {
-      if (error === "manual") {
-        const manualFolder = "Manuellt";
-        await this.moveMessage(manualFolder);
-        await this.markMessageAsUnseen();
-        return;
-      }
-
-      if (error === "no-unread-messages") {
+      if (error === "already-processed") {
         // NOT HANDLED YET.
         // Having some issues not knowing how to think about this.
         // I have to go undergound and think some
@@ -105,27 +121,58 @@ class MessageHandler {
       logger.error(this.error, "MessageHandler");
     } finally {
       this.isWorking = false;
+      if (this.messageQueue.length > 0) {
+        setImmediate(() => this.runLogic()); // Bearbeta nästa meddelande om det finns något kvar i kön
+      }
+    }
+  }
+
+  async enqueueMessage(message) {
+    this.messageQueue.push(message); // Lägg till meddelandet i kön
+    if (!this.isWorking) {
+      await this.runLogic(); // Försök att köra logiken endast om den inte redan körs
     }
   }
 
   processNextMessage = async () =>
     new Promise((resolve, reject) => {
-      logger.log("Processing next message...", "MessageHandler");
+      // logger.log("Processing next message...", "MessageHandler");
 
       this.imap.search(["UNSEEN"], (err, results) => {
         if (err) {
           logger.error(err, "MessageHandler");
-
           return reject(err);
         }
 
-        logger.log(results, "MessageHandler", "Queue");
         if (!results || results.length === 0) {
           logger.log("No unread emails left.", "MessageHandler");
           return reject("no-unread-messages");
         }
 
-        this.message = results[0];
+        logger.log(this.messageQueue, "MessageHandler", "Queue");
+        logger.log(
+          `Next in line: ${this.accountId}:${this.message}`,
+          "MessageHandler",
+          "Queue"
+        );
+
+        const message = results.find(
+          (msg) =>
+            !this.emailStatusManager.messageHasBeenSeen(msg, this.accountId)
+        );
+
+        if (!message) {
+          logger.log(
+            "Message has been processed.",
+            "MessageHandler",
+            this.accountId + ":" + this.message
+          );
+          return reject("already-processed");
+        }
+
+        this.emailStatusManager.markMessageAsSeen(message, this.accountId);
+
+        this.message = message;
         return resolve();
       });
     });
@@ -137,7 +184,7 @@ class MessageHandler {
       const fetch = this.imap.fetch(this.message, {
         bodies: "",
         struct: true,
-        markSeen: true,
+        markSeen: false,
       });
 
       fetch.on("message", (msg) => {
@@ -192,12 +239,12 @@ class MessageHandler {
       });
     });
 
-  checkManualFilter = async () => {
-    const response = await useManualFilter({
+  checkAutoFilter = async () => {
+    const response = await useAutoFilter({
       ...this.parsedMessage,
       organizationId: this.organizationId,
     });
-    return response.data.manual;
+    return response.data.output;
   };
 
   moveMessage = async (folderName) =>
@@ -205,7 +252,7 @@ class MessageHandler {
       const moveMessage = () => {
         this.imap.move(this.message, folderName, (err) => {
           if (err && err.textCode === "TRYCREATE") {
-            return createFolder();
+            return createFolder(folderName);
           } else if (err) {
             logger.error(err, "MessageHandler", "moveMessageManual");
             return reject(err);
@@ -230,11 +277,11 @@ class MessageHandler {
       moveMessage();
     });
 
-  markMessageAsUnseen = () =>
+  markMessageAsSeen = () =>
     new Promise((resolve, reject) => {
-      this.imap.delFlags(this.message, ["\\Seen"], (err) => {
+      this.imap.addFlags(this.message, ["\\Seen"], (err) => {
         if (err) {
-          logger.error(err, "MessageHandler", "markMessageAsUnseen");
+          logger.error(err, "MessageHandler", "markMessageAsSeen");
           return reject(err);
         } else {
           resolve();

@@ -3,7 +3,6 @@ require("dotenv").config();
 const MainInboxHandler = require("./InboxHandler");
 const initHeartbeat = require("./heartbeat");
 const checkEnv = require("./utils/checkEnv");
-const { testAgentConnection } = require("./utils/useAgent");
 const { testApiConnection } = require("./utils/useApi");
 
 function init() {
@@ -26,7 +25,7 @@ async function main() {
   const mailerConfig = {
     organizationId: "6567688da895a324a728385d",
     mainInbox: "[Gmail]/Alla mail",
-    manualFilter: true,
+    autoFilter: true,
     imapConfig: {
       user: process.env.IMAP_USERNAME,
       password: process.env.IMAP_PASSWORD,

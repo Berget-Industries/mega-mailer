@@ -1,20 +1,22 @@
-import { useApi } from "./useApi";
-const api = useApi();
+const { useApi } = require("./useApi");
 
 async function useMegaAssistant(body) {
+  const api = await useApi();
   return api.post("/chains/mega-assistant", body);
 }
 
-async function useManualFilter(body) {
-  return api.post("/chains/manualFilter", body);
+async function useAutoFilter(body) {
+  const api = await useApi();
+  return api.post("/chains/auto-filter", body);
 }
 
 async function useMailSubjector(body) {
+  const api = await useApi();
   return api.post("/chains/mailSubjector", body);
 }
 
 module.exports = {
   useMegaAssistant,
-  useManualFilter,
+  useAutoFilter,
   useMailSubjector,
 };

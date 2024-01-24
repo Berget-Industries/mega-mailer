@@ -14,10 +14,10 @@ class InboxHandler {
   _onMail = this._onMail.bind(this);
   _onEnd = this._onEnd.bind(this);
 
-  constructor({ imapConfig, mainInbox, manualFilter, organizationId }) {
+  constructor({ imapConfig, mainInbox, autoFilter, organizationId }) {
     this.imapConfig = imapConfig;
     this.mainInbox = mainInbox;
-    this.manualFilter = manualFilter;
+    this.autoFilter = autoFilter;
     this.organizationId = organizationId;
 
     this.initImap();
@@ -29,7 +29,8 @@ class InboxHandler {
     this.imap = new Imap(this.imapConfig);
     this.messageHandler = new MessageHandler({
       organizationId: this.organizationId,
-      manualFilter: this.manualFilter,
+      accountId: this.imapConfig.user,
+      autoFilter: this.autoFilter,
       imap: this.imap,
     });
   }
@@ -49,9 +50,14 @@ class InboxHandler {
 
   async _onMail() {
     logger.log("New mail received.", "InboxHandler");
-    if (!this.messageHandler.isWorking) {
-      this.messageHandler.runLogic(this.manualFilter);
-    }
+    // Hämta listan över UNSEEN meddelanden och lägg till dem i kön
+    this.imap.search(["UNSEEN"], (err, results) => {
+      if (err) {
+        logger.error(err, "InboxHandler");
+        return;
+      }
+      results.forEach((message) => this.messageHandler.enqueueMessage(message));
+    });
   }
 
   _onError(error) {
