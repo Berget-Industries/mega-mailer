@@ -30,7 +30,7 @@ class InboxHandler {
     this.messageHandler = new MessageHandler({
       organizationId: this.organizationId,
       accountId: this.imapConfig.user,
-      autoFilter: true,
+      autoFilter: this.autoFilter,
       imap: this.imap,
     });
   }

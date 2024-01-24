@@ -25,7 +25,7 @@ async function main() {
   const mailerConfig = {
     organizationId: "6567688da895a324a728385d",
     mainInbox: "[Gmail]/Alla mail",
-    manualFilter: true,
+    autoFilter: true,
     imapConfig: {
       user: process.env.IMAP_USERNAME,
       password: process.env.IMAP_PASSWORD,
