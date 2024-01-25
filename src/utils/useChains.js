@@ -1,17 +1,17 @@
 const { useApi } = require("./useApi");
 
-async function useMegaAssistant(body) {
-  const api = await useApi();
+async function useMegaAssistant(key, body) {
+  const api = await useApi(key);
   return api.post("/chains/mega-assistant", body);
 }
 
-async function useAutoFilter(body) {
-  const api = await useApi();
+async function useAutoFilter(key, body) {
+  const api = await useApi(key);
   return api.post("/chains/auto-filter", body);
 }
 
-async function useMailSubjector(body) {
-  const api = await useApi();
+async function useMailSubjector(key, body) {
+  const api = await useApi(key);
   return api.post("/chains/mailSubjector", body);
 }
 

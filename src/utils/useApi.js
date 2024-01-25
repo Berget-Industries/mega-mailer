@@ -1,6 +1,6 @@
 const axios = require("axios");
 
-const { API_KEY, API_HOST } = process.env;
+const { API_HOST } = process.env;
 const baseUrl = API_HOST + "/api";
 
 async function testApiConnection() {
@@ -15,21 +15,21 @@ async function testApiConnection() {
   });
 }
 
-async function useApi() {
+async function useApi(key) {
   return {
     get: (path) => {
       const url = baseUrl + path;
       return axios.get(url, {
         headers: {
-          Authorization: API_KEY,
+          Authorization: key,
         },
       });
     },
-    post: (path, body) => {
+    post: (key, path, body) => {
       const url = baseUrl + path;
       return axios.post(url, body, {
         headers: {
-          Authorization: API_KEY,
+          Authorization: key,
         },
       });
     },

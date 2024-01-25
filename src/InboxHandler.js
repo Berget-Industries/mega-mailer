@@ -14,11 +14,11 @@ class InboxHandler {
   _onMail = this._onMail.bind(this);
   _onEnd = this._onEnd.bind(this);
 
-  constructor({ imapConfig, mainInbox, autoFilter, organizationId }) {
+  constructor({ imapConfig, mainInbox, apiKey, autoFilter }) {
     this.imapConfig = imapConfig;
-    this.mainInbox = mainInbox;
     this.autoFilter = autoFilter;
-    this.organizationId = organizationId;
+    this.mainInbox = mainInbox;
+    this.apiKey = apiKey;
 
     this.initImap();
     this.initEvents();
@@ -28,9 +28,9 @@ class InboxHandler {
   initImap() {
     this.imap = new Imap(this.imapConfig);
     this.messageHandler = new MessageHandler({
-      organizationId: this.organizationId,
       accountId: this.imapConfig.user,
       autoFilter: this.autoFilter,
+      apiKey: this.apiKey,
       imap: this.imap,
     });
   }
