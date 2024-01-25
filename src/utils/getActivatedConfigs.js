@@ -1,4 +1,5 @@
 const { useApi } = require("./useApi");
+const logger = require("./logger");
 
 module.exports = async function () {
   const activatedApiKeys = process.env.ACTIVATED_API_KEYS;
@@ -11,10 +12,16 @@ module.exports = async function () {
 
   for (const key of listOfKeys) {
     const api = await useApi(key);
-    const response = await api.get("/plugins/get-config?plugin=mailer");
-    const { config } = response.data;
-
-    formattedList.push({ ...config, apiKey: key });
+    api
+      .get("/plugins/get-config?plugin=mailer")
+      .then(({ status, data }) => {
+        if (status === "success") {
+          formattedList.push({ ...data.config, apiKey: key });
+        }
+      })
+      .catch((error) => {
+        logger.error(`Kunde inte ladda config för nyckel: ${key}.`);
+      });
   }
 
   return Promise.resolve(formattedList);
