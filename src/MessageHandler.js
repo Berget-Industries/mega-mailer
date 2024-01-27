@@ -9,8 +9,6 @@ const {
 const logger = require("./utils/logger");
 const EmailStatusManager = require("./utils/EmailStatusManager");
 
-const { IMAP_USERNAME, IMAP_PASSWORD, IMAP_FROM } = process.env;
-
 class MessageHandler {
   imap = null;
   message = null;
@@ -25,15 +23,15 @@ class MessageHandler {
   parsedMessage = null;
 
   draft = {
-    from: IMAP_FROM,
+    from: null,
     subject: null,
     to: null,
     html: null,
   };
 
-  constructor({ imap, organizationId, autoFilter, accountId }) {
+  constructor({ imap, apiKey, autoFilter, accountId }) {
     this.imap = imap;
-    this.organizationId = organizationId;
+    this.apiKey = apiKey;
     this.autoFilter = autoFilter;
     this.accountId = accountId;
 
@@ -240,10 +238,7 @@ class MessageHandler {
     });
 
   checkAutoFilter = async () => {
-    const response = await useAutoFilter({
-      ...this.parsedMessage,
-      organizationId: this.organizationId,
-    });
+    const response = await useAutoFilter(this.apiKey, this.parsedMessage);
     return response.data.output;
   };
 
@@ -308,15 +303,14 @@ class MessageHandler {
         address,
         message,
         sessionId,
-        organizationId: this.organizationId,
       };
 
       try {
-        const response = await useMegaAssistant(requestBody);
+        const response = await useMegaAssistant(this.apiKey, requestBody);
 
         const { output, sessionId } = response.data;
 
-        const generatedMailSubjectResponse = await useMailSubject({
+        const generatedMailSubjectResponse = await useMailSubject(this.apiKey, {
           userMessage: message,
           assistantMessage: output,
         });
@@ -328,11 +322,11 @@ class MessageHandler {
           : `Re: ${subject} | ${sessionId}`;
 
         this.draft = {
-          from: IMAP_FROM,
+          from: this.accountId,
           subject: newSubject,
           to: address,
           html: output,
-          replyTo: IMAP_FROM,
+          replyTo: this.accountId,
           headers: {
             "In-Reply-To": messageId,
             References: references
