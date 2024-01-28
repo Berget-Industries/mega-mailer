@@ -1,20 +1,20 @@
 module.exports = function checkEnv() {
   const {
+    API_HOST,
+    API_KEY,
     HEARTBEAT_PORT,
     IMAP_USERNAME,
     IMAP_PASSWORD,
     IMAP_FROM,
-    API_HOST,
-    ACTIVATED_API_KEYS,
   } = process.env;
 
   const vars = {
+    API_HOST,
+    API_KEY,
     HEARTBEAT_PORT,
     IMAP_USERNAME,
     IMAP_PASSWORD,
     IMAP_FROM,
-    API_HOST,
-    ACTIVATED_API_KEYS,
   };
 
   const isEmpty = Object.entries(vars)
