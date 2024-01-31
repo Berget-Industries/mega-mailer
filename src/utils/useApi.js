@@ -25,7 +25,7 @@ async function useApi(key) {
         },
       });
     },
-    post: (key, path, body) => {
+    post: (path, body) => {
       const url = baseUrl + path;
       return axios.post(url, body, {
         headers: {

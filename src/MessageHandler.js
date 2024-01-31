@@ -4,7 +4,7 @@ const nodemailer = require("nodemailer");
 const {
   useMegaAssistant,
   useAutoFilter,
-  useMailSubject,
+  useMailSubjector,
 } = require("./utils/useChains");
 const logger = require("./utils/logger");
 const EmailStatusManager = require("./utils/EmailStatusManager");
@@ -15,9 +15,10 @@ class MessageHandler {
   accountId = null;
 
   isWorking = false;
-  messageQueue = [];
+  shouldStop = false;
   isMessageFromSelf = false;
   error = [];
+  cleanup = () => {};
 
   messageBodyStream = null;
   parsedMessage = null;
@@ -29,155 +30,161 @@ class MessageHandler {
     html: null,
   };
 
-  constructor({ imap, apiKey, autoFilter, accountId }) {
+  constructor({
+    imap,
+    apiKey,
+    autoFilter,
+    accountId,
+    nodemailerConfig,
+    message,
+    cleanup,
+  }) {
     this.imap = imap;
     this.apiKey = apiKey;
     this.autoFilter = autoFilter;
     this.accountId = accountId;
+    this.nodemailerConfig = nodemailerConfig;
+    this.message = message;
+    this.cleanup = cleanup;
 
     this.emailStatusManager = new EmailStatusManager();
 
-    logger.log("New message handler", "MessageHandler");
+    logger.log(
+      "New MessageHandler created!",
+      "MessageHandler",
+      this.accountId,
+      this.message
+    );
+
+    this.runLogic();
   }
 
-  reset = () => {
-    this.message = null;
+  async close() {
+    logger.log("Closing...", "MessageHandler", this.accountId, this.message);
+    this.shouldStop = true;
 
-    this.isWorking = false;
-    this.isMessageFromSelf = false;
-    this.error = [];
+    while (this.isWorking) {
+      logger.log(
+        "Waiting for worker to finish...",
+        "MessageHandler",
+        this.accountId,
+        this.message
+      );
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
 
-    this.messageBodyStream = null;
-    this.parsedMessage = null;
-
-    this.parsedMessage = {
-      name: null,
-      address: null,
-      message: null,
-      sessionId: null,
-    };
-
-    this.draft = {
-      to: null,
-      from: null,
-      html: null,
-      subject: null,
-    };
-  };
-
+    logger.log("Closed!", "MessageHandler", this.accountId, this.message);
+    return Promise.resolve();
+  }
   async runLogic() {
-    if (this.isWorking || this.messageQueue.length === 0) return;
     this.isWorking = true;
 
-    // Ta bort första meddelandet från kön och bearbeta det
-    const message = this.messageQueue.shift();
-    this.message = message;
-
     try {
-      await this.processNextMessage();
+      // await this.processNextMessage();
       await this.fetchMessage();
       await this.parseMessage();
 
       if (this.autoFilter) {
-        logger.log("Auto-filtering...", "MessageHandler");
+        logger.log(
+          "Auto-filtering...",
+          "MessageHandler",
+          this.accountId,
+          this.message
+        );
+
         const autoFilterOutput = await this.checkAutoFilter();
 
         if (autoFilterOutput === "MEGA-ASSISTANT") {
-          await this.moveMessage(".Assistant");
+          await this.movingLogic(".Assistant");
           await this.markMessageAsSeen();
+
+          await this.generateDraft();
+          await this.sendDraft();
         } else {
           const split = autoFilterOutput.split("/");
 
           const parentFolder = split[0];
           const subFolder = autoFilterOutput;
 
-          await this.moveMessage(parentFolder);
-          await this.moveMessage(subFolder);
+          const onlyCreateFolder = this.accountId.endsWith(
+            "@outlook.com" || "@hotmail.com" || "@live.com" || "@msn.com"
+          );
 
-          return;
+          await this.movingLogic(parentFolder, onlyCreateFolder);
+          await this.movingLogic(subFolder);
         }
       }
 
-      await this.generateDraft();
-      await this.sendDraft();
+      this.isWorking = false;
+      logger.log(
+        "Finished! Handler is self closing...",
+        "MessageHandler",
+        this.accountId,
+        this.message
+      );
+      this.cleanup();
+      return;
     } catch (error) {
       if (error === "already-processed") {
         // NOT HANDLED YET.
         // Having some issues not knowing how to think about this.
         // I have to go undergound and think some
-        return;
-      }
-
-      if (error === "message-from-self") {
+      } else if (error === "message-from-self") {
         // NOT HANDLED YET.
         // Having some issues not knowing how to think about this.
         // I have to go undergound and think some
-        return;
-      }
-
-      logger.error(error, "MessageHandler");
-      logger.error(this.error, "MessageHandler");
-    } finally {
-      this.isWorking = false;
-      if (this.messageQueue.length > 0) {
-        setImmediate(() => this.runLogic()); // Bearbeta nästa meddelande om det finns något kvar i kön
-      }
-    }
-  }
-
-  async enqueueMessage(message) {
-    this.messageQueue.push(message); // Lägg till meddelandet i kön
-    if (!this.isWorking) {
-      await this.runLogic(); // Försök att köra logiken endast om den inte redan körs
-    }
-  }
-
-  processNextMessage = async () =>
-    new Promise((resolve, reject) => {
-      // logger.log("Processing next message...", "MessageHandler");
-
-      this.imap.search(["UNSEEN"], (err, results) => {
-        if (err) {
-          logger.error(err, "MessageHandler");
-          return reject(err);
-        }
-
-        if (!results || results.length === 0) {
-          logger.log("No unread emails left.", "MessageHandler");
-          return reject("no-unread-messages");
-        }
-
-        logger.log(this.messageQueue, "MessageHandler", "Queue");
-        logger.log(
-          `Next in line: ${this.accountId}:${this.message}`,
+      } else {
+        logger.error(error, "MessageHandler", this.accountId, this.message);
+        logger.error(
+          this.error,
           "MessageHandler",
-          "Queue"
+          this.accountId,
+          this.message
         );
 
-        const message = results.find(
-          (msg) =>
-            !this.emailStatusManager.messageHasBeenSeen(msg, this.accountId)
+        this.emailStatusManager.markMessageAsUnread(
+          this.message,
+          this.accountId,
+          this.message
         );
+      }
 
-        if (!message) {
-          logger.log(
-            "Message has been processed.",
-            "MessageHandler",
-            this.accountId + ":" + this.message
-          );
-          return reject("already-processed");
-        }
-
-        this.emailStatusManager.markMessageAsSeen(message, this.accountId);
-
-        this.message = message;
-        return resolve();
-      });
-    });
+      this.isWorking = false;
+      logger.log(
+        "Finished! Handler is self closing.",
+        "MessageHandler",
+        this.accountId,
+        this.message
+      );
+      this.cleanup();
+      return;
+    }
+  }
 
   fetchMessage = async () =>
     new Promise((resolve, reject) => {
-      logger.log("Fetching message...", "MessageHandler");
+      const isSeen = this.emailStatusManager.messageHasBeenSeen(
+        this.message,
+        this.accountId
+      );
+      if (isSeen) {
+        logger.log(
+          "Skipping! (Already processed)",
+          "MessageHandler",
+          this.accountId,
+          this.message
+        );
+        return reject("already-processed");
+      }
+
+      this.emailStatusManager.markMessageAsSeen(this.message, this.accountId);
+
+      logger.log(
+        "Fetching message...",
+        "MessageHandler",
+        this.accountId,
+        this.message
+      );
 
       const fetch = this.imap.fetch(this.message, {
         bodies: "",
@@ -201,7 +208,12 @@ class MessageHandler {
 
   parseMessage = () =>
     new Promise((resolve, reject) => {
-      logger.log("Parsing message...", "MessageHandler");
+      logger.log(
+        "Parsing message...",
+        "MessageHandler",
+        this.accountId,
+        this.message
+      );
 
       simpleParser(this.messageBodyStream, async (err, parsed) => {
         if (err) {
@@ -219,7 +231,7 @@ class MessageHandler {
         const messageId = parsed.headers.get("message-id");
         const references = parsed.headers.get("references");
 
-        if (address === IMAP_USERNAME) {
+        if (address === this.accountId) {
           this.isMessageFromSelf = true;
           return reject("message-from-self");
         }
@@ -242,34 +254,103 @@ class MessageHandler {
     return response.data.output;
   };
 
-  moveMessage = async (folderName) =>
+  movingLogic = async (folderName, onlyFolder = false) => {
+    try {
+      const folderExists = await this.checkIfFolderExists(folderName);
+
+      if (!folderExists) {
+        console.log("createFolder", folderName);
+        await this.createFolder(folderName);
+      }
+
+      if (!onlyFolder) {
+        await this.moveMessage(folderName);
+      }
+    } catch (error) {
+      //logger.error(error, "MessageHandler", this.accountId, this.message);
+    }
+  };
+
+  checkIfFolderExists = async (folderName) =>
     new Promise((resolve, reject) => {
-      const moveMessage = () => {
-        this.imap.move(this.message, folderName, (err) => {
-          if (err && err.textCode === "TRYCREATE") {
-            return createFolder(folderName);
-          } else if (err) {
-            logger.error(err, "MessageHandler", "moveMessageManual");
-            return reject(err);
+      this.imap.getBoxes((err, boxes) => {
+        if (err) {
+          logger.error(
+            err,
+            "MessageHandler",
+            this.accountId,
+            this.message,
+            "checkIfFolderExists"
+          );
+          return reject(err);
+        } else {
+          if (folderName.includes("/")) {
+            const parentFolder = folderName.split("/")[0];
+            const subFolder = folderName.split("/")[1];
+
+            if (
+              boxes[parentFolder] &&
+              boxes[parentFolder].children &&
+              Object.keys(boxes[parentFolder].children).includes(subFolder)
+            ) {
+              return resolve(true);
+            } else {
+              return resolve(false);
+            }
           } else {
-            logger.log(`Message moved to ${folderName}`, "MessageHandler");
-            return resolve();
+            const folderExists = boxes[folderName] ? true : false;
+            return resolve(folderExists);
           }
-        });
-      };
+        }
+      });
+    });
 
-      const createFolder = () => {
-        this.imap.addBox(folderName, (err) => {
-          if (err) {
-            logger.error(err, "MessageHandler", "createFolder");
-            return reject(err);
-          }
-          logger.log(`Folder created: ${folderName}`, "MessageHandler");
-          return moveMessage();
-        });
-      };
+  createFolder = async (folderName) =>
+    new Promise((resolve, reject) => {
+      this.imap.addBox(folderName, (err) => {
+        if (err) {
+          logger.error(
+            err,
+            "MessageHandler",
+            this.accountId,
+            this.message,
+            "createFolder"
+          );
+          return reject(err);
+        } else {
+          logger.log(
+            `Folder created: ${folderName}`,
+            "MessageHandler",
+            this.accountId,
+            this.message
+          );
+          return resolve();
+        }
+      });
+    });
 
-      moveMessage();
+  moveMessage = async (folderName) =>
+    new Promise(async (resolve, reject) => {
+      this.imap.move(this.message, folderName, async (err) => {
+        if (err) {
+          logger.error(
+            err,
+            "MessageHandler",
+            this.accountId,
+            this.message,
+            "moveMessageManual"
+          );
+          return reject(err);
+        } else {
+          logger.log(
+            `Message moved to ${folderName}`,
+            "MessageHandler",
+            this.accountId,
+            this.message
+          );
+          return resolve();
+        }
+      });
     });
 
   markMessageAsSeen = () =>
@@ -286,7 +367,12 @@ class MessageHandler {
 
   generateDraft = () =>
     new Promise(async (resolve, reject) => {
-      logger.log("Generating draft...", "MessageHandler");
+      logger.log(
+        "Generating draft...",
+        "MessageHandler",
+        this.accountId,
+        this.message
+      );
 
       const {
         name,
@@ -310,10 +396,13 @@ class MessageHandler {
 
         const { output, sessionId } = response.data;
 
-        const generatedMailSubjectResponse = await useMailSubject(this.apiKey, {
-          userMessage: message,
-          assistantMessage: output,
-        });
+        const generatedMailSubjectResponse = await useMailSubjector(
+          this.apiKey,
+          {
+            userMessage: message,
+            assistantMessage: output,
+          }
+        );
 
         const newSubject = !subject
           ? `${generatedMailSubjectResponse.data.subject} | ${sessionId}`
@@ -357,15 +446,14 @@ class MessageHandler {
 
   sendDraft = () =>
     new Promise((resolve, reject) => {
-      logger.log("Sending draft...", "MessageHandler");
+      logger.log(
+        "Sending draft...",
+        "MessageHandler",
+        this.accountId,
+        this.message
+      );
 
-      let transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-          user: IMAP_USERNAME,
-          pass: IMAP_PASSWORD,
-        },
-      });
+      let transporter = nodemailer.createTransport(this.nodemailerConfig);
 
       transporter.sendMail(this.draft, (err, info) => {
         if (err) {

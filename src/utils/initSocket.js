@@ -6,9 +6,6 @@ module.exports = function initSocket() {
     try {
       const { API_HOST, API_KEY } = process.env;
 
-      console.log("API_HOST", API_HOST);
-      console.log("API_KEY", API_KEY);
-
       const socket = io(API_HOST, {
         autoConnect: true,
         withCredentials: true,
