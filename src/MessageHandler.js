@@ -14,6 +14,7 @@ class MessageHandler {
   message = null;
   accountId = null;
 
+  apiMessageId = "";
   isWorking = false;
   shouldStop = false;
   isMessageFromSelf = false;
@@ -251,7 +252,9 @@ class MessageHandler {
 
   checkAutoFilter = async () => {
     const response = await useAutoFilter(this.apiKey, this.parsedMessage);
-    return response.data.output;
+    const { output, messageId: apiMessageId } = response.data;
+    this.apiMessageId = apiMessageId;
+    return output;
   };
 
   movingLogic = async (folderName, onlyFolder = false) => {
@@ -389,19 +392,17 @@ class MessageHandler {
         address,
         message,
         sessionId,
+        messageId: this.apiMessageId,
       };
 
       try {
         const response = await useMegaAssistant(this.apiKey, requestBody);
 
-        const { output, sessionId } = response.data;
+        const { output, sessionId, messageId: apiMessageId } = response.data;
 
         const generatedMailSubjectResponse = await useMailSubjector(
           this.apiKey,
-          {
-            userMessage: message,
-            assistantMessage: output,
-          }
+          { messageId: apiMessageId }
         );
 
         const newSubject = !subject
