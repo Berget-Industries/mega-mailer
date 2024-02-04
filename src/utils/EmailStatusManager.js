@@ -48,6 +48,16 @@ class EmailStatusManager {
       this.writeDataFile(data);
     }
   }
+
+  markMessageAsUnread(messageId, accountId) {
+    const data = this.readDataFile();
+    const uniqueId = `${accountId}:${messageId}`;
+    const index = data.indexOf(uniqueId);
+    if (index !== -1) {
+      data.splice(index, 1);
+      this.writeDataFile(data);
+    }
+  }
 }
 
 module.exports = EmailStatusManager;

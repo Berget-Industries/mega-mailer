@@ -1,20 +1,17 @@
 require("dotenv").config();
 
-const MainInboxHandler = require("./InboxHandler");
-const initHeartbeat = require("./heartbeat");
 const checkEnv = require("./utils/checkEnv");
 const { testApiConnection } = require("./utils/useApi");
-const getActivatedConfigs = require("./utils/getActivatedConfigs");
+const initSocket = require("./utils/initSocket");
 
 function init() {
   return new Promise(async (resolve, reject) => {
     try {
       checkEnv();
-      initHeartbeat();
       await testApiConnection();
+      await initSocket();
 
-      const activatedConfigs = await getActivatedConfigs();
-      resolve(activatedConfigs);
+      resolve();
     } catch (error) {
       console.error(error);
       process.exit(1);
@@ -22,12 +19,4 @@ function init() {
   });
 }
 
-async function main() {
-  const activatedConfigs = await init();
-
-  activatedConfigs.forEach((config) => {
-    new MainInboxHandler(config);
-  });
-}
-
-main();
+init();
