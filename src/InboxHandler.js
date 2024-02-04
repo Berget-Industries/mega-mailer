@@ -83,7 +83,7 @@ class InboxHandler {
     );
 
     this.shouldRestart = true;
-    this.close(true);
+    await this.close(true);
   }
 
   _onEnd() {
@@ -131,6 +131,7 @@ class InboxHandler {
     this.imap = null;
     this.isCloseing = false;
     this.messageHandler = null;
+    this.shouldRestart = false;
 
     this.initImap();
     this.initEvents();
