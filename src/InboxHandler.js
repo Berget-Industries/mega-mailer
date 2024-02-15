@@ -37,6 +37,7 @@ class InboxHandler {
     logger.log("Initializing events...", "InboxHandler", this.imapConfig.user);
     if (!this.imap) {
       logger.log("Imap is undefined!", "InboxHandler", this.imapConfig.user);
+      this.close();
       return;
     }
 
@@ -54,6 +55,7 @@ class InboxHandler {
     this.imap.search(["UNSEEN"], (err, results) => {
       if (err) {
         logger.error(err, "InboxHandler", this.imapConfig.user);
+        this.close();
         return;
       }
 
@@ -82,15 +84,16 @@ class InboxHandler {
       this.imapConfig.user
     );
 
-    this.shouldRestart = true;
-    this.close(true);
-  }
+    await this.close();
 
-  _onEnd() {
-    logger.log("Connection ended", "InboxHandler", this.imapConfig.user);
-    if (this.shouldRestart) {
+    if (error === "Error: read ETIMEDOUT") {
       this.restart();
     }
+  }
+
+  async _onEnd() {
+    logger.log("Connection ended", "InboxHandler", this.imapConfig.user);
+    await this.close();
   }
 
   _onReady() {
@@ -113,7 +116,8 @@ class InboxHandler {
     this.imap.connect();
   }
 
-  async close(shouldRestart) {
+  async close() {
+    if (this.isCloseing) return;
     this.isCloseing = true;
 
     const messageHandlers = Object.values(this.messageHandlers);
@@ -122,20 +126,20 @@ class InboxHandler {
     logger.log("Closing...", "InboxHandler", this.imapConfig.user);
     this.imap.end();
 
-    return Promise.resolve();
-  }
-
-  async restart() {
-    logger.error("RESTARTING!", "InboxHandler", this.imapConfig.user);
-
     this.imap = null;
-    this.isCloseing = false;
-    this.messageHandler = null;
-
-    this.initImap();
-    this.initEvents();
-    this.connect();
   }
+
+  // async restart() {
+  //   logger.error("RESTARTING!", "InboxHandler", this.imapConfig.user);
+
+  //   this.imap = null;
+  //   this.isCloseing = false;
+  //   this.messageHandler = null;
+
+  //   this.initImap();
+  //   this.initEvents();
+  //   this.connect();
+  // }
 }
 
 module.exports = InboxHandler;
