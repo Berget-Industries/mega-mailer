@@ -11,26 +11,30 @@ process.on("SIGINT", async () => {
   process.exit(1);
 });
 
-const loadConfigs = (newConfigs) => {
+const loadConfigs = (newConfigs, socket) => {
   newConfigs.forEach(({ _id, config }) => {
     logger.log("Loading config...", "InboxHandler", config.imapConfig.user);
-    const newHandler = new MainInboxHandler(config);
+    const newHandler = new MainInboxHandler({
+      ...config,
+      socket,
+      pluginId: _id,
+    });
     handlers[_id] = newHandler;
   });
 };
 
-const addOneConfigs = ({ _id, config }) => {
+const addOneConfigs = ({ _id, config }, socket) => {
   logger.log("Adding config...", "InboxHandler", config.imapConfig.user);
-  const newHandler = new MainInboxHandler(config);
+  const newHandler = new MainInboxHandler({ ...config, socket, pluginId: _id });
   handlers[_id] = newHandler;
 };
 
-const updateConfig = async ({ _id, config }) => {
+const updateConfig = async ({ _id, config }, socket) => {
   await removeConfig();
 
   logger.log("Updating config...", "InboxHandler", config.imapConfig.user);
 
-  const newHandler = new MainInboxHandler(config);
+  const newHandler = new MainInboxHandler({ ...config, socket, pluginId: _id });
   handlers[_id] = newHandler;
 };
 
@@ -63,8 +67,8 @@ module.exports = function sockerHandler(socket) {
   socket.on("connect_error", handleDisconnect);
   socket.on("connect_timeout", handleDisconnect);
 
-  socket.on("mailer_assign-configs", loadConfigs);
-  socket.on("mailer_assign-config", addOneConfigs);
-  socket.on("mailer_update-config", updateConfig);
+  socket.on("mailer_assign-configs", (data) => loadConfigs(data, socket));
+  socket.on("mailer_assign-config", (data) => addOneConfigs(data, socket));
+  socket.on("mailer_update-config", (data) => updateConfig(data, socket));
   socket.on("mailer_remove-config", removeConfig);
 };
