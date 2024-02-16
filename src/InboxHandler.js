@@ -17,16 +17,41 @@ class InboxHandler {
   _onMail = this._onMail.bind(this);
   _onEnd = this._onEnd.bind(this);
 
-  constructor({ imapConfig, mainInbox, apiKey, autoFilter, nodemailerConfig }) {
+  constructor({
+    imapConfig,
+    mainInbox,
+    apiKey,
+    autoFilter,
+    nodemailerConfig,
+    socket,
+    pluginId,
+  }) {
     this.nodemailerConfig = nodemailerConfig;
     this.imapConfig = imapConfig;
     this.autoFilter = autoFilter;
     this.mainInbox = mainInbox;
     this.apiKey = apiKey;
+    this.socket = socket;
+    this.pluginId = pluginId;
 
+    this.start();
+  }
+
+  start() {
+    logger.log("Starting...", "InboxHandler", this.imapConfig.user);
     this.initImap();
     this.initEvents();
     this.connect();
+  }
+
+  initHeartbeat() {
+    const func = () => {
+      this.socket.emit("mailer_heartbeat", this.pluginId);
+    };
+
+    this.heartbeat = setInterval(func, 1000 * 60);
+
+    func();
   }
 
   initImap() {
@@ -37,6 +62,7 @@ class InboxHandler {
     logger.log("Initializing events...", "InboxHandler", this.imapConfig.user);
     if (!this.imap) {
       logger.log("Imap is undefined!", "InboxHandler", this.imapConfig.user);
+      this.close();
       return;
     }
 
@@ -54,6 +80,7 @@ class InboxHandler {
     this.imap.search(["UNSEEN"], (err, results) => {
       if (err) {
         logger.error(err, "InboxHandler", this.imapConfig.user);
+        this.close();
         return;
       }
 
@@ -82,19 +109,18 @@ class InboxHandler {
       this.imapConfig.user
     );
 
-    this.shouldRestart = true;
-    await this.close(true);
+    await this.close();
+    this.start();
   }
 
-  _onEnd() {
+  async _onEnd() {
     logger.log("Connection ended", "InboxHandler", this.imapConfig.user);
-    if (this.shouldRestart) {
-      this.restart();
-    }
+    await this.close();
   }
 
   _onReady() {
     logger.log("Connection ready!", "InboxHandler", this.imapConfig.user);
+    this.initHeartbeat();
     this.imap.openBox(this.mainInbox, false, (err, box) => {
       if (err) {
         logger.error(
@@ -102,7 +128,7 @@ class InboxHandler {
           "InboxHandler",
           this.imapConfig.user
         );
-        this.restart();
+        this.start();
         return;
       }
     });
@@ -113,7 +139,8 @@ class InboxHandler {
     this.imap.connect();
   }
 
-  async close(shouldRestart) {
+  async close() {
+    if (this.isCloseing) return;
     this.isCloseing = true;
 
     const messageHandlers = Object.values(this.messageHandlers);
@@ -122,20 +149,9 @@ class InboxHandler {
     logger.log("Closing...", "InboxHandler", this.imapConfig.user);
     this.imap.end();
 
+    this.heartbeat && clearInterval(this.heartbeat);
+    delete this.imap;
     return Promise.resolve();
-  }
-
-  async restart() {
-    logger.error("RESTARTING!", "InboxHandler", this.imapConfig.user);
-
-    this.imap = null;
-    this.isCloseing = false;
-    this.messageHandler = null;
-    this.shouldRestart = false;
-
-    this.initImap();
-    this.initEvents();
-    this.connect();
   }
 }
 

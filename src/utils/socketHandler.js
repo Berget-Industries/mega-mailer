@@ -1,9 +1,9 @@
 const MainInboxHandler = require("../InboxHandler");
 const logger = require("./logger");
 
-let handlers = [];
+const handlers = {};
 const handleClose = async () =>
-  await Promise.all(handlers.map((handler) => handler.close()));
+  await Promise.all(Object.values(handlers).map((handler) => handler.close()));
 
 process.on("SIGINT", async () => {
   logger.log("SIGINT", "InboxHandler");
@@ -11,32 +11,54 @@ process.on("SIGINT", async () => {
   process.exit(1);
 });
 
-const loadConfigs = (configs) => {
-  configs.forEach((config) => {
+const loadConfigs = (newConfigs, socket) => {
+  newConfigs.forEach(({ _id, config }) => {
     logger.log("Loading config...", "InboxHandler", config.imapConfig.user);
-    const handler = new MainInboxHandler(config);
-    handlers.push(handler);
+    const newHandler = new MainInboxHandler({
+      ...config,
+      socket,
+      pluginId: _id,
+    });
+    handlers[_id] = newHandler;
   });
 };
 
-const updateConfigs = async (newConfigs) => {
-  await handleClose();
-  handlers = [];
-  loadConfigs(newConfigs);
+const addOneConfigs = ({ _id, config }, socket) => {
+  logger.log("Adding config...", "InboxHandler", config.imapConfig.user);
+  const newHandler = new MainInboxHandler({ ...config, socket, pluginId: _id });
+  handlers[_id] = newHandler;
+};
+
+const updateConfig = async ({ _id, config }, socket) => {
+  await removeConfig();
+
+  logger.log("Updating config...", "InboxHandler", config.imapConfig.user);
+
+  const newHandler = new MainInboxHandler({ ...config, socket, pluginId: _id });
+  handlers[_id] = newHandler;
+};
+
+const removeConfig = async (_id) => {
+  if (!handlers[_id]) return;
+
+  logger.log("Removing config...", "InboxHandler", _id);
+
+  await handlers[_id].close();
+  delete handlers[_id];
 };
 
 module.exports = function sockerHandler(socket) {
   const handleConnect = () => {
-    console.log("Connected to server");
+    logger.log("Connected to server", "InboxHandler", "SocketIO");
     socket.emit("register-mailer");
   };
 
   const handleDisconnect = async () => {
-    console.log("Disconnected from server, quitting...");
+    logger.log("Disconnected from server", "InboxHandler", "SocketIO");
 
     await handleClose();
 
-    logger.log("Shutdown complete!", "InboxHandler");
+    logger.log("Shutdown complete!", "InboxHandler", "SocketIO");
     process.exit(1);
   };
 
@@ -45,6 +67,8 @@ module.exports = function sockerHandler(socket) {
   socket.on("connect_error", handleDisconnect);
   socket.on("connect_timeout", handleDisconnect);
 
-  socket.on("mailer_assign-configs", loadConfigs);
-  //socket.on("mailer_update-configs", updateConfigs);
+  socket.on("mailer_assign-configs", (data) => loadConfigs(data, socket));
+  socket.on("mailer_assign-config", (data) => addOneConfigs(data, socket));
+  socket.on("mailer_update-config", (data) => updateConfig(data, socket));
+  socket.on("mailer_remove-config", removeConfig);
 };
