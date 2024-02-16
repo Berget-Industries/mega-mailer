@@ -110,7 +110,6 @@ class InboxHandler {
     );
 
     await this.close();
-
     this.start();
   }
 
@@ -152,6 +151,7 @@ class InboxHandler {
 
     this.heartbeat && clearInterval(this.heartbeat);
     delete this.imap;
+    return Promise.resolve();
   }
 }
 

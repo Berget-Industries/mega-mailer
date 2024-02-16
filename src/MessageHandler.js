@@ -14,6 +14,8 @@ class MessageHandler {
   message = null;
   accountId = null;
 
+  apiMessageId = "";
+  apiConversationId = "";
   isWorking = false;
   shouldStop = false;
   isMessageFromSelf = false;
@@ -76,6 +78,17 @@ class MessageHandler {
     logger.log("Closed!", "MessageHandler", this.accountId, this.message);
     return Promise.resolve();
   }
+
+  async runMegaAssistant() {
+    await this.movingLogic(".Assistant");
+    await this.markMessageAsSeen();
+
+    await this.generateDraft();
+    await this.sendDraft();
+
+    this.emailStatusManager.markMessageAsSeen(this.message, this.accountId);
+  }
+
   async runLogic() {
     this.isWorking = true;
 
@@ -84,34 +97,42 @@ class MessageHandler {
       await this.fetchMessage();
       await this.parseMessage();
 
-      if (this.autoFilter) {
-        logger.log(
-          "Auto-filtering...",
-          "MessageHandler",
-          this.accountId,
-          this.message
-        );
-
-        const autoFilterOutput = await this.checkAutoFilter();
-
-        if (autoFilterOutput === "MEGA-ASSISTANT") {
-          await this.movingLogic(".Assistant");
-          await this.markMessageAsSeen();
-
-          await this.generateDraft();
-          await this.sendDraft();
-        } else {
-          const split = autoFilterOutput.split("/");
-
-          const parentFolder = split[0];
-          const subFolder = autoFilterOutput;
-
-          const onlyCreateFolder = this.accountId.endsWith(
-            "@outlook.com" || "@hotmail.com" || "@live.com" || "@msn.com"
+      if (
+        this.parsedMessage.references &&
+        this.parsedMessage.references.length > 0
+      ) {
+        await this.runMegaAssistant();
+      } else {
+        if (this.autoFilter) {
+          logger.log(
+            "Auto-filtering...",
+            "MessageHandler",
+            this.accountId,
+            this.message
           );
 
-          await this.movingLogic(parentFolder, onlyCreateFolder);
-          await this.movingLogic(subFolder);
+          const autoFilterOutput = await this.checkAutoFilter();
+
+          if (autoFilterOutput === "MEGA-ASSISTANT") {
+            await this.runMegaAssistant();
+          } else {
+            const split = autoFilterOutput.split("/");
+
+            const parentFolder = split[0];
+            const subFolder = autoFilterOutput;
+
+            const onlyCreateFolder = this.accountId.endsWith(
+              "@outlook.com" || "@hotmail.com" || "@live.com" || "@msn.com"
+            );
+
+            await this.movingLogic(parentFolder, onlyCreateFolder);
+            await this.movingLogic(subFolder);
+
+            this.emailStatusManager.markMessageAsSeen(
+              this.parsedMessage.messageId,
+              this.accountId
+            );
+          }
         }
       }
 
@@ -138,12 +159,6 @@ class MessageHandler {
         logger.error(
           this.error,
           "MessageHandler",
-          this.accountId,
-          this.message
-        );
-
-        this.emailStatusManager.markMessageAsUnread(
-          this.message,
           this.accountId,
           this.message
         );
@@ -176,8 +191,6 @@ class MessageHandler {
         );
         return reject("already-processed");
       }
-
-      this.emailStatusManager.markMessageAsSeen(this.message, this.accountId);
 
       logger.log(
         "Fetching message...",
@@ -227,7 +240,7 @@ class MessageHandler {
 
         const idRegex = /[0-9a-f]{24}/;
         const match = subject.match(idRegex);
-        const sessionId = match ? match[0] : null;
+        const conversationId = match ? match[0] : null;
         const messageId = parsed.headers.get("message-id");
         const references = parsed.headers.get("references");
 
@@ -236,22 +249,51 @@ class MessageHandler {
           return reject("message-from-self");
         }
 
+        if (references) {
+          const isSeen = references.some((ref) =>
+            this.emailStatusManager.messageHasBeenSeen(ref, this.accountId)
+          );
+
+          if (isSeen) {
+            logger.log(
+              "Skipping! (Continuation of a thread with a message already sorted!)",
+              "MessageHandler",
+              this.accountId,
+              this.message
+            );
+            return reject("already-processed");
+          }
+        }
+
         this.parsedMessage = {
           name,
           address,
           message,
           subject,
-          sessionId,
+          conversationId,
           messageId,
           references,
         };
+
         return resolve();
       });
     });
 
   checkAutoFilter = async () => {
-    const response = await useAutoFilter(this.apiKey, this.parsedMessage);
-    return response.data.output;
+    const requestBody = {
+      contactName: this.parsedMessage.name,
+      contactEmail: this.parsedMessage.address,
+      message: this.parsedMessage.message,
+      conversationId: this.apiConversationId,
+    };
+
+    const response = await useAutoFilter(this.apiKey, requestBody);
+    const { output, messageId: apiMessageId, conversationId } = response.data;
+    console.log(response.data);
+    this.apiMessageId = apiMessageId;
+    this.parsedMessage.conversationId = conversationId;
+    this.apiConversationId = conversationId;
+    return output;
   };
 
   movingLogic = async (folderName, onlyFolder = false) => {
@@ -259,7 +301,6 @@ class MessageHandler {
       const folderExists = await this.checkIfFolderExists(folderName);
 
       if (!folderExists) {
-        console.log("createFolder", folderName);
         await this.createFolder(folderName);
       }
 
@@ -379,36 +420,40 @@ class MessageHandler {
         address,
         message,
         subject,
-        sessionId,
+        conversationId,
         messageId,
         references,
       } = this.parsedMessage;
 
       const requestBody = {
-        name,
-        address,
+        contactName: name,
+        contactEmail: address,
         message,
-        sessionId,
+        conversationId,
+        messageId: this.apiMessageId,
       };
 
       try {
         const response = await useMegaAssistant(this.apiKey, requestBody);
 
-        const { output, sessionId } = response.data;
+        const {
+          output,
+          conversationId,
+          messageId: apiMessageId,
+        } = response.data;
+
+        this.apiMessageId = apiMessageId;
 
         const generatedMailSubjectResponse = await useMailSubjector(
           this.apiKey,
-          {
-            userMessage: message,
-            assistantMessage: output,
-          }
+          { messageId: this.apiMessageId }
         );
 
         const newSubject = !subject
-          ? `${generatedMailSubjectResponse.data.subject} | ${sessionId}`
+          ? `${generatedMailSubjectResponse.data.output} | ${conversationId}`
           : subject.startsWith("Re: ")
           ? subject
-          : `Re: ${subject} | ${sessionId}`;
+          : `Re: ${subject} | ${conversationId}`;
 
         this.draft = {
           from: this.accountId,
