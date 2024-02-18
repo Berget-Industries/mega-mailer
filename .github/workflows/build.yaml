@@ -1,8 +1,8 @@
-name: Docker Build
+name: Development
 
 on:
   push:
-    branches: ["release"]
+    branches: ["main"]
 
 permissions:
   contents: read
@@ -10,6 +10,7 @@ permissions:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Setup repo
         uses: actions/checkout@v3
@@ -25,3 +26,16 @@ jobs:
 
       - name: Push Docker image
         run: docker push willebergh/mega-mailer:latest
+
+    deploy:
+      needs: build
+      runs-on: ubuntu-latest
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      steps:
+        - name: Update server
+          uses: appleboy/ssh-action@v1.0.3
+          with:
+            host: ${{ secrets.CD_SERVER_HOST }}
+            username: ${{ secrets.CD_SERVER_USERNAME }}
+            password: ${{ secrets.CD_SERVER_PASSWORD }}
+            script: ~/mega/update_mailer.sh
