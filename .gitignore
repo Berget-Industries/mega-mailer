@@ -1,3 +1,4 @@
 node_modules
 .env
 src/utils/seenEmails.json
+test.js
