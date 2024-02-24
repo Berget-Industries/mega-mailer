@@ -30,7 +30,7 @@ const addOneConfigs = ({ _id, config }, socket) => {
 };
 
 const updateConfig = async ({ _id, config }, socket) => {
-  await removeConfig();
+  await removeConfig(_id);
 
   logger.log("Updating config...", "InboxHandler", config.imapConfig.user);
 
