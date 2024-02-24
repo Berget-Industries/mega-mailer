@@ -1,9 +1,10 @@
 module.exports = function checkEnv() {
-  const { API_HOST, API_KEY } = process.env;
+  const { API_HOST, API_KEY, MONGOOSE_CONNECT_URI } = process.env;
 
   const vars = {
     API_HOST,
     API_KEY,
+    MONGOOSE_CONNECT_URI,
   };
 
   const isEmpty = Object.entries(vars)
@@ -11,8 +12,7 @@ module.exports = function checkEnv() {
     .map(([k, v]) => k);
 
   if (isEmpty.length > 0) {
-    console.log("Enviornment variables not set!");
-    console.log("Missing values for: ", isEmpty);
+    console.log("Enviornment variables not set. Missing values for: ", isEmpty);
     process.exit(1);
   }
 };
