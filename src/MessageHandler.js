@@ -125,7 +125,7 @@ class MessageHandler {
           if (autoFilterOutput === "MEGA-ASSISTANT") {
             await this.runMegaAssistant();
           } else if (autoFilterOutput === "OTHER") {
-            await this.moveLogic("Övrigt");
+            await this.movingLogic("Övrigt");
 
             await this.emailStatusManager.markMessageAsSeen(
               this.parsedMessage.messageId,
