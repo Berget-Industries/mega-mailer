@@ -1,62 +1,17 @@
-const fs = require("fs");
-const path = require("path");
+const Mail = require("../models/Mail");
 
 class EmailStatusManager {
-  constructor() {
-    const fileName = "seenEmails.json";
-    const filePath = path.join(__dirname, fileName);
-
-    this.filePath = filePath;
-    this.ensureDataFileExists();
+  async messageHasBeenSeen(messageId, accountId) {
+    const message = await Mail.findOne({ messageId, accountId });
+    return Boolean(message);
   }
 
-  ensureDataFileExists() {
-    if (!fs.existsSync(this.filePath)) {
-      fs.writeFileSync(this.filePath, JSON.stringify([]));
-    }
+  async markMessageAsSeen(messageId, accountId) {
+    await Mail.create({ messageId, accountId, isSeen: true });
   }
 
-  readDataFile() {
-    try {
-      const data = fs.readFileSync(this.filePath, "utf8");
-      return JSON.parse(data);
-    } catch (error) {
-      console.error("Failed to read the data file:", error);
-      return []; // Returnerar en tom array om något går fel
-    }
-  }
-
-  writeDataFile(data) {
-    try {
-      fs.writeFileSync(this.filePath, JSON.stringify(data, null, 2));
-    } catch (error) {
-      console.error("Failed to write to the data file:", error);
-    }
-  }
-
-  messageHasBeenSeen(messageId, accountId) {
-    const data = this.readDataFile();
-    const uniqueId = `${accountId}:${messageId}`;
-    return data.includes(uniqueId);
-  }
-
-  markMessageAsSeen(messageId, accountId) {
-    const data = this.readDataFile();
-    const uniqueId = `${accountId}:${messageId}`;
-    if (!data.includes(uniqueId)) {
-      data.push(uniqueId);
-      this.writeDataFile(data);
-    }
-  }
-
-  markMessageAsUnread(messageId, accountId) {
-    const data = this.readDataFile();
-    const uniqueId = `${accountId}:${messageId}`;
-    const index = data.indexOf(uniqueId);
-    if (index !== -1) {
-      data.splice(index, 1);
-      this.writeDataFile(data);
-    }
+  async markMessageAsUnread(messageId, accountId) {
+    await Mail.findOneAndDelete({ messageId, accountId });
   }
 }
 

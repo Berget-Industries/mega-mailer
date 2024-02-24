@@ -2,6 +2,9 @@ require("dotenv").config();
 const Imap = require("imap");
 const logger = require("./utils/logger");
 const MessageHandler = require("./MessageHandler");
+const EmailStatusManager = require("./utils/EmailStatusManager");
+
+const emailStatusManager = new EmailStatusManager();
 
 class InboxHandler {
   imap = null;
@@ -84,7 +87,15 @@ class InboxHandler {
         return;
       }
 
+      if (results.length === 0) {
+        return;
+      }
+
       results.forEach((message) => {
+        if (this.messageHandlers[message]) {
+          return;
+        }
+
         const newHandler = new MessageHandler({
           nodemailerConfig: this.nodemailerConfig,
           accountId: this.imapConfig.user,
@@ -131,6 +142,30 @@ class InboxHandler {
         this.start();
         return;
       }
+
+      this.imap.search(["UNSEEN"], (err, results) => {
+        if (err) {
+          logger.error(err, "InboxHandler", this.imapConfig.user);
+          this.close();
+          return;
+        }
+
+        // results.forEach((message) => {
+        //   const newHandler = new MessageHandler({
+        //     nodemailerConfig: this.nodemailerConfig,
+        //     accountId: this.imapConfig.user,
+        //     autoFilter: this.autoFilter,
+        //     apiKey: this.apiKey,
+        //     imap: this.imap,
+        //     message,
+        //     cleanup: () => {
+        //       delete this.messageHandlers[message];
+        //     },
+        //   });
+
+        //   this.messageHandlers[message] = newHandler;
+        // });
+      });
     });
   }
 

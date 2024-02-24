@@ -86,7 +86,10 @@ class MessageHandler {
     await this.generateDraft();
     await this.sendDraft();
 
-    this.emailStatusManager.markMessageAsSeen(this.message, this.accountId);
+    await this.emailStatusManager.markMessageAsSeen(
+      this.message,
+      this.accountId
+    );
   }
 
   async runLogic() {
@@ -97,12 +100,18 @@ class MessageHandler {
       await this.fetchMessage();
       await this.parseMessage();
 
+      const isMessageAutoFilterd =
+        await this.emailStatusManager.messageHasBeenSeen(
+          this.parsedMessage.messageId,
+          this.accountId
+        );
       if (
         this.parsedMessage.references &&
-        this.parsedMessage.references.length > 0
+        this.parsedMessage.references.length > 0 &&
+        !isMessageAutoFilterd
       ) {
         await this.runMegaAssistant();
-      } else {
+      } else if (!isMessageAutoFilterd) {
         if (this.autoFilter) {
           logger.log(
             "Auto-filtering...",
@@ -115,6 +124,13 @@ class MessageHandler {
 
           if (autoFilterOutput === "MEGA-ASSISTANT") {
             await this.runMegaAssistant();
+          } else if (autoFilterOutput === "OTHER") {
+            await this.moveLogic("Övrigt");
+
+            await this.emailStatusManager.markMessageAsSeen(
+              this.parsedMessage.messageId,
+              this.accountId
+            );
           } else {
             const split = autoFilterOutput.split("/");
 
@@ -128,7 +144,7 @@ class MessageHandler {
             await this.movingLogic(parentFolder, onlyCreateFolder);
             await this.movingLogic(subFolder);
 
-            this.emailStatusManager.markMessageAsSeen(
+            await this.emailStatusManager.markMessageAsSeen(
               this.parsedMessage.messageId,
               this.accountId
             );
@@ -163,22 +179,21 @@ class MessageHandler {
           this.message
         );
       }
-
-      this.isWorking = false;
+    } finally {
       logger.log(
         "Finished! Handler is self closing.",
         "MessageHandler",
         this.accountId,
         this.message
       );
+      this.isWorking = false;
       this.cleanup();
-      return;
     }
   }
 
   fetchMessage = async () =>
-    new Promise((resolve, reject) => {
-      const isSeen = this.emailStatusManager.messageHasBeenSeen(
+    new Promise(async (resolve, reject) => {
+      const isSeen = await this.emailStatusManager.messageHasBeenSeen(
         this.message,
         this.accountId
       );
@@ -235,7 +250,9 @@ class MessageHandler {
         }
 
         const { name, address } = parsed.from.value[0];
-        const message = this.removeMessageHistory(parsed.text);
+        const message = this.removeMessageHistory(
+          parsed.text ? parsed.text : ""
+        );
         const subject = parsed.subject ? parsed.subject : "";
 
         const idRegex = /[0-9a-f]{24}/;
@@ -250,19 +267,24 @@ class MessageHandler {
         }
 
         if (references) {
-          const isSeen = references.some((ref) =>
-            this.emailStatusManager.messageHasBeenSeen(ref, this.accountId)
-          );
-
-          if (isSeen) {
-            logger.log(
-              "Skipping! (Continuation of a thread with a message already sorted!)",
-              "MessageHandler",
-              this.accountId,
-              this.message
+          for (const ref of references) {
+            console.log(ref);
+            const isSeen = await this.emailStatusManager.messageHasBeenSeen(
+              ref,
+              this.accountId
             );
-            return reject("already-processed");
+            if (isSeen) {
+              logger.log(
+                "Skipping! (Continuation of a thread with a message already sorted!)",
+                "MessageHandler",
+                this.accountId,
+                this.message
+              );
+              reject("already-processed");
+              break;
+            }
           }
+          return;
         }
 
         this.parsedMessage = {
@@ -288,8 +310,18 @@ class MessageHandler {
     };
 
     const response = await useAutoFilter(this.apiKey, requestBody);
-    const { output, messageId: apiMessageId, conversationId } = response.data;
-    console.log(response.data);
+    const {
+      status,
+      message,
+      output,
+      messageId: apiMessageId,
+      conversationId,
+    } = response.data;
+
+    if (status !== "success") {
+      throw new Error(message);
+    }
+
     this.apiMessageId = apiMessageId;
     this.parsedMessage.conversationId = conversationId;
     this.apiConversationId = conversationId;
