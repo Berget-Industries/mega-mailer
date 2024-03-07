@@ -149,22 +149,6 @@ class InboxHandler {
           this.close();
           return;
         }
-
-        // results.forEach((message) => {
-        //   const newHandler = new MessageHandler({
-        //     nodemailerConfig: this.nodemailerConfig,
-        //     accountId: this.imapConfig.user,
-        //     autoFilter: this.autoFilter,
-        //     apiKey: this.apiKey,
-        //     imap: this.imap,
-        //     message,
-        //     cleanup: () => {
-        //       delete this.messageHandlers[message];
-        //     },
-        //   });
-
-        //   this.messageHandlers[message] = newHandler;
-        // });
       });
     });
   }
@@ -186,6 +170,9 @@ class InboxHandler {
 
     this.heartbeat && clearInterval(this.heartbeat);
     delete this.imap;
+
+    this.socket.emit("mailer_close", this.pluginId);
+
     return Promise.resolve();
   }
 }
