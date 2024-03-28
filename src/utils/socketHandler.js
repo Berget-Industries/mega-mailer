@@ -47,6 +47,30 @@ const removeConfig = async (_id) => {
   delete handlers[_id];
 };
 
+const sendMail = async ({ to, from, subject, text }) => {
+  const foundHandler = Object.values(handlers).find(
+    (handler) => handler.nodemailerConfig.auth.user === from
+  );
+
+  if (!foundHandler) {
+    logger.error("Handler not found", "InboxHandler", from);
+    return;
+  }
+
+  foundHandler
+    .sendMail({
+      to,
+      subject,
+      text,
+    })
+    .then(() => {
+      logger.log("Mail sent", "InboxHandler", from, subject);
+    })
+    .catch((err) => {
+      logger.error(err, "InboxHandler", from);
+    });
+};
+
 module.exports = function sockerHandler(socket) {
   const handleConnect = () => {
     logger.log("Connected to server", "InboxHandler", "SocketIO");
@@ -71,4 +95,6 @@ module.exports = function sockerHandler(socket) {
   socket.on("mailer_assign-config", (data) => addOneConfigs(data, socket));
   socket.on("mailer_update-config", (data) => updateConfig(data, socket));
   socket.on("mailer_remove-config", removeConfig);
+
+  socket.on("chain-starter-send-mail", sendMail);
 };

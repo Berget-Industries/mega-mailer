@@ -1,6 +1,7 @@
 require("dotenv").config();
 const Imap = require("imap");
 const logger = require("./utils/logger");
+const nodemailer = require("nodemailer");
 const MessageHandler = require("./MessageHandler");
 const EmailStatusManager = require("./utils/EmailStatusManager");
 
@@ -175,6 +176,35 @@ class InboxHandler {
 
     return Promise.resolve();
   }
+
+  sendMail = ({ to, subject, text }) =>
+    new Promise((resolve, reject) => {
+      logger.log(
+        "Sending mail...",
+        "InboxHandler",
+        this.nodemailerConfig.auth.user,
+        subject
+      );
+
+      let transporter = nodemailer.createTransport(this.nodemailerConfig);
+
+      transporter.sendMail(
+        {
+          from: this.imapConfig.user,
+          to,
+          subject,
+          text,
+        },
+        (err, info) => {
+          if (err) {
+            logger.error(err, "InboxHandler", "sendMail");
+            return reject(err);
+          } else {
+            return resolve(info);
+          }
+        }
+      );
+    });
 }
 
 module.exports = InboxHandler;
