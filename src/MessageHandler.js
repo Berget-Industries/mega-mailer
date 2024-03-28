@@ -80,7 +80,7 @@ class MessageHandler {
   }
 
   async runMegaAssistant() {
-    await this.movingLogic(".Assistant");
+    await this.movingLogic("Assistant");
     await this.markMessageAsSeen();
 
     await this.generateDraft();
@@ -149,6 +149,8 @@ class MessageHandler {
               this.accountId
             );
           }
+        } else {
+          await this.runMegaAssistant();
         }
       }
 
