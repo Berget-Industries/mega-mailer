@@ -261,7 +261,10 @@ class MessageHandler {
         const match = subject.match(idRegex);
         const conversationId = match ? match[0] : null;
         const messageId = parsed.headers.get("message-id");
-        const references = parsed.headers.get("references");
+        let references = parsed.headers.get("references");
+        if (typeof references === "string") {
+          references = [references];
+        }
 
         if (address === this.accountId) {
           this.isMessageFromSelf = true;
@@ -286,7 +289,6 @@ class MessageHandler {
               break;
             }
           }
-          return;
         }
 
         this.parsedMessage = {
@@ -478,13 +480,14 @@ class MessageHandler {
 
         this.apiMessageId = apiMessageId;
 
-        const generatedMailSubjectResponse = await useMailSubjector(
-          this.apiKey,
-          { messageId: this.apiMessageId }
-        );
-
         const newSubject = !subject
-          ? `${generatedMailSubjectResponse.data.output} | ${conversationId}`
+          ? `${
+              (
+                await useMailSubjector(this.apiKey, {
+                  messageId: this.apiMessageId,
+                })
+              ).data.output
+            } | ${conversationId}`
           : subject.startsWith("Re: ")
           ? subject
           : `Re: ${subject} | ${conversationId}`;
